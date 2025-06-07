@@ -39,7 +39,7 @@ jobs:
       
       - name: Deploy app to Modal
         run: |
-          timeout 20s modal run --detach deploy.py || true
+          timeout 20s modal run --detach deploy.py::run_app_with_secrets || true
           echo "部署命令已执行，继续..."
 
       - name: Check Modal app status
