@@ -76,7 +76,8 @@ class BackgroundService:
 # 方案2：无限循环带重启机制
 @app.function(
     image=image,
-    timeout=None,  # 无超时限制
+    scaledown_window=86400
+    timeout=86400,  # 无超时限制
     retries=0  # 禁用自动重试，我们自己处理
 )
 def run_persistent_task():
