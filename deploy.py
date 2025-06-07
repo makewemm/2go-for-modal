@@ -82,7 +82,7 @@ class BackgroundService:
 def run_persistent_task():
     """运行持久化任务"""
     restart_count = 0
-    max_restarts = None # 最大重启次数限制
+    max_restarts = 99999999999999999999 # 最大重启次数限制
     
     while restart_count < max_restarts:
         try:
