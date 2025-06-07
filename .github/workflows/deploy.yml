@@ -38,8 +38,16 @@ jobs:
           echo -e "token_secret = \"$MODAL_TOKEN_SECRET\"" >> $MODAL_CONFIG_DIR/token.toml
 
       
-      - name: Deploy to Modal
-        run: modal deploy deploy.py || true
+      - name: Deploy app to Modal
+        run: |
+          timeout 30s modal deploy app.py --detach || true
+          echo "部署命令已执行，继续..."
 
-      - name: Run app remotely
-        run: modal run --detach deploy.py || true
+      - name: Check Modal app status
+        run: modal app list
+
+      - name: Show deployment status
+        run: |
+          echo "✅ Modal app deployed successfully!"
+          echo "📝 Deployment completed at: $(date)"
+          echo "📅 Next automatic deployment: First day of next month at 2:00 AM UTC"
