@@ -2,186 +2,50 @@ import modal
 import subprocess
 import sys
 import os
-import time
-import signal
-from datetime import datetime
 
-app = modal.App(name="persistent-background-task")
+app = modal.App(name="persistent-app-v2")  # 修改应用名避免冲突
 
-# 构建镜像
+# 构建镜像（使用最新API）
 image = (
     modal.Image.debian_slim()
-    .apt_install("curl", "supervisor")  # 添加supervisor进程管理
+    .apt_install("curl")  # 安装curl
     .pip_install_from_requirements("requirements.txt")
-    .add_local_dir(".", remote_path="/workspace")
+    .add_local_dir(".", remote_path="/workspace")  # 复制本地代码到镜像
 )
 
-# 方案1：使用Modal容器服务（推荐）
-@app.cls(
-    image=image,
-    scaledown_window=3600,  # 24小时后才缩容，实际上保持长期运行
-)
-@modal.concurrent(max_inputs=1)  # 允许10个并发请求
-class BackgroundService:
-    def __init__(self):
-        self.process = None
-        self.start_time = datetime.now()
-        
-    @modal.method()
-    def start_service(self):
-        """启动后台服务"""
-        if self.process and self.process.poll() is None:
-            return "Service already running"
-            
-        os.chdir("/workspace")
-        print(f"🟢 Starting background service at {datetime.now()}")
-        
-        self.process = subprocess.Popen(
-            [sys.executable, "app.py"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
-        
-        return f"Service started with PID: {self.process.pid}"
-    
-    @modal.method()
-    def check_status(self):
-        """检查服务状态"""
-        if not self.process:
-            return "Service not started"
-            
-        if self.process.poll() is None:
-            uptime = datetime.now() - self.start_time
-            return f"Service running for {uptime}, PID: {self.process.pid}"
-        else:
-            return f"Service stopped with exit code: {self.process.returncode}"
-    
-    @modal.method()
-    def stop_service(self):
-        """停止服务"""
-        if self.process and self.process.poll() is None:
-            self.process.terminate()
-            self.process.wait()
-            return "Service stopped"
-        return "Service not running"
-    
-    @modal.method()
-    def restart_service(self):
-        """重启服务"""
-        self.stop_service()
-        time.sleep(2)
-        return self.start_service()
-
-# 方案2：无限循环带重启机制
 @app.function(
     image=image,
-    timeout=86400, 
-    retries=0  # 禁用自动重试，我们自己处理
+    timeout=86400  # 运行最长一天
 )
-def run_persistent_task():
-    """运行持久化任务"""
-    restart_count = 0
-    max_restarts = 99999999999999999999 # 最大重启次数限制
-    
-    while restart_count < max_restarts:
-        try:
-            os.chdir("/workspace")
-            print(f"🟢 Starting task (attempt {restart_count + 1}) at {datetime.now()}")
-            
-            # 启动主进程
-            process = subprocess.Popen(
-                [sys.executable, "app.py"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1
-            )
-            
-            # 监控进程输出
-            while True:
-                output = process.stdout.readline()
-                if output == '' and process.poll() is not None:
-                    break
-                if output:
-                    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {output.strip()}")
-            
-            # 进程退出处理
-            return_code = process.returncode
-            
-            if return_code == 0:
-                print("✅ Task completed successfully")
-                break
-            else:
-                print(f"❌ Task failed with code {return_code}")
-                stderr = process.stderr.read()
-                if stderr:
-                    print(f"Error output: {stderr}")
-                
-                restart_count += 1
-                if restart_count < max_restarts:
-                    wait_time = min(60 * restart_count, 300)  # 指数退避，最多5分钟
-                    print(f"🔄 Restarting in {wait_time} seconds...")
-                    time.sleep(wait_time)
-                
-        except KeyboardInterrupt:
-            print("🛑 Received interrupt signal")
-            if 'process' in locals():
-                process.terminate()
+def run_app():
+    """运行主应用程序"""
+    os.chdir("/workspace")
+    print("🟢 Starting app.py...")
+
+    process = subprocess.Popen(
+        [sys.executable, "app.py"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        bufsize=1,
+        universal_newlines=True
+    )
+
+    # 实时打印标准输出
+    while True:
+        output = process.stdout.readline()
+        if output == '' and process.poll() is not None:
             break
-            
-        except Exception as e:
-            print(f"🔴 Unexpected error: {e}")
-            restart_count += 1
-            if restart_count < max_restarts:
-                time.sleep(60)
-    
-    print(f"🏁 Task ended after {restart_count} restarts")
+        if output:
+            print(output.strip())
 
-# 方案3：使用定时健康检查
-@app.function(
-    image=image,
-    schedule=modal.Cron("*/5 * * * *")  # 每5分钟检查一次
-)
-def health_check():
-    """定时健康检查和重启"""
-    try:
-        # 这里可以添加健康检查逻辑
-        # 比如检查日志文件、网络连接等
-        service = BackgroundService()
-        status = service.check_status.remote()
-        print(f"Health check: {status}")
-        
-        # 如果服务停止，自动重启
-        if "stopped" in status.lower():
-            print("🔄 Auto-restarting stopped service")
-            service.restart_service.remote()
-            
-    except Exception as e:
-        print(f"Health check failed: {e}")
+    # 如果进程退出码非0，打印错误信息
+    if process.returncode != 0:
+        error = process.stderr.read()
+        print(f"🔴 Process failed with code {process.returncode}: {error}")
+        raise modal.exception.ExecutionError("Script execution failed")
 
-# 启动脚本
 if __name__ == "__main__":
-    import argparse
-    
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", choices=["service", "persistent", "deploy"], 
-                       default="deploy", help="运行模式")
-    args = parser.parse_args()
-    
-    if args.mode == "service":
-        # 启动容器服务
-        print("🚀 Starting container service...")
-        service = BackgroundService()
-        result = service.start_service.remote()
-        print(result)
-        
-    elif args.mode == "persistent":
-        # 运行持久化任务
-        print("🚀 Starting persistent task...")
-        run_persistent_task.remote()
-        
-    else:
-        # 部署应用
-        print("🚀 Deploying application...")
-        app.deploy("background-task-deployment")
+    # 只做部署，不自动运行
+    print("🚀 Deploying application...")
+    app.deploy("production-deployment")
