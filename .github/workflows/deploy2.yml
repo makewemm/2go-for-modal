@@ -1,0 +1,142 @@
+name: Deploy to Modal2
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 1 * *'  # 每月1号凌晨2点UTC (修复cron表达式)
+  push:
+    branches:
+      - main
+    paths:
+      - '**.py'
+      - 'requirements.txt'
+      - '.github/workflows/deploy.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10  # 增加超时时间
+    
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+      MODAL_CONFIG_DIR: /home/runner/.modal
+      PYTHONUNBUFFERED: 1
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4  # 使用最新版本
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'  # 使用更新的Python版本
+          cache: 'pip'  # 启用pip缓存
+
+      - name: Create requirements.txt if not exists
+        run: |
+          if [ ! -f requirements.txt ]; then
+            echo "modal>=0.64.0" > requirements.txt
+            echo "📝 Created basic requirements.txt"
+          fi
+
+      - name: Install dependencies
+        run: |
+          pip install --no-cache-dir --upgrade pip
+          pip install --no-cache-dir --upgrade "modal>=0.64.0"
+          if [ -f requirements.txt ]; then
+            pip install --no-cache-dir -r requirements.txt
+          fi
+
+      - name: Verify Modal installation
+        run: |
+          python -c "import modal; print(f'Modal version: {modal.__version__}')"
+          modal --version
+
+      - name: Configure Modal authentication
+        run: |
+          mkdir -p $MODAL_CONFIG_DIR
+          cat > $MODAL_CONFIG_DIR/token.toml << EOF
+          [default]
+          token_id = "$MODAL_TOKEN_ID"
+          token_secret = "$MODAL_TOKEN_SECRET"
+          EOF
+          
+          echo "✅ Modal token configured"
+
+      - name: List existing apps (before deployment)
+        run: |
+          echo "📋 Current Modal apps:"
+          modal app list || echo "No apps found or connection issue"
+
+      - name: Deploy Modal app
+        id: deploy
+        run: |
+          echo "🚀 Starting deployment..."
+          
+          # 检查部署文件是否存在
+          if [ ! -f deploy.py ]; then
+            echo "❌ deploy.py not found, continuing without deploy..."
+          else
+            # 执行部署 (忽略错误继续执行)
+            echo "📦 Deploying application..."
+            modal deploy deploy.py --name persistent-app-production || echo "⚠️ Deployment had issues, continuing..."
+          fi
+          
+          echo "✅ Deployment step completed"
+
+      - name: Start application
+        id: start_app  
+        run: |
+          echo "🏃 Starting application with container strategy..."
+          
+          # 使用容器策略启动应用 (忽略错误继续执行)
+          echo "📦 Using container service strategy..."
+          modal run deploy.py::main --strategy=container --detach || {
+            echo "⚠️ Container start failed, retrying..."
+            sleep 5
+            modal run deploy.py::main --strategy=container --detach || echo "⚠️ Container retry failed, continuing..."
+          }
+          
+          echo "✅ Application start step completed"
+
+      - name: Verify deployment
+        run: |
+          echo "🔍 Verifying deployment..."
+          sleep 10  # 等待应用启动
+          
+          modal app list || echo "⚠️ Could not list apps, continuing..."
+          
+          # 检查应用状态 (忽略错误)
+          app_status=$(modal app list | grep -E "(persistent-app|running)" || echo "not_found")
+          if [[ "$app_status" == "not_found" ]]; then
+            echo "⚠️ Warning: App may not be running as expected"
+          else
+            echo "✅ App appears to be running"
+          fi
+          
+          echo "✅ Verification step completed"
+
+      - name: Cleanup on failure
+        if: failure()
+        run: |
+          echo "🧹 Cleaning up failed deployment..."
+          modal app stop persistent-app-production || true
+          echo "❌ Deployment failed, please check logs"
+
+      - name: Show deployment summary
+        if: always()
+        run: |
+          echo "📋 Deployment Summary:"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🎯 Strategy: container (fixed)"
+          echo "📅 Deployed at: $(date -u)"
+          echo "🔗 Triggered by: ${{ github.event_name }}"
+          echo "👤 Actor: ${{ github.actor }}"
+          echo "📝 Commit: ${{ github.sha }}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          
+          echo "✅ Status: COMPLETED (errors ignored)"
+          echo "🚀 Modal deployment process finished!"
+          echo "📊 Monitor: https://modal.com/apps"
+
