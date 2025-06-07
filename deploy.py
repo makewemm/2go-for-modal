@@ -19,13 +19,13 @@ image = (
 # 方案1：使用Modal容器服务（推荐）
 @app.cls(
     image=image,
-    scaledown_window=3600,  # 24小时后才缩容，实际上保持长期运行
+    scaledown_window=3600,  # 3600s后才缩容，实际上保持长期运行
 )
-@modal.concurrent(max_inputs=1)  # 允许10个并发请求
+@modal.concurrent(max_inputs=1)  # 允许1个并发请求
 class BackgroundService:
-    def __init__(self):
-        self.process = None
-        self.start_time = datetime.now()
+    # 使用Modal的新式参数声明，移除__init__
+    process: subprocess.Popen = None
+    start_time: datetime = None
         
     @modal.method()
     def start_service(self):
@@ -34,7 +34,8 @@ class BackgroundService:
             return "Service already running"
             
         os.chdir("/workspace")
-        print(f"🟢 Starting background service at {datetime.now()}")
+        self.start_time = datetime.now()  # 在这里初始化时间
+        print(f"🟢 Starting background service at {self.start_time}")
         
         self.process = subprocess.Popen(
             [sys.executable, "app.py"],
@@ -52,8 +53,11 @@ class BackgroundService:
             return "Service not started"
             
         if self.process.poll() is None:
-            uptime = datetime.now() - self.start_time
-            return f"Service running for {uptime}, PID: {self.process.pid}"
+            if self.start_time:
+                uptime = datetime.now() - self.start_time
+                return f"Service running for {uptime}, PID: {self.process.pid}"
+            else:
+                return f"Service running, PID: {self.process.pid}"
         else:
             return f"Service stopped with exit code: {self.process.returncode}"
     
