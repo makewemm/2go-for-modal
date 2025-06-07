@@ -19,7 +19,7 @@ image = (
 # 方案1：使用Modal容器服务（推荐）
 @app.cls(
     image=image,
-    scaledown_window=86400,  # 24小时后才缩容，实际上保持长期运行
+    scaledown_window=3600,  # 24小时后才缩容，实际上保持长期运行
 )
 @modal.concurrent(max_inputs=1)  # 允许10个并发请求
 class BackgroundService:
