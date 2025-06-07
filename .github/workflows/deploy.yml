@@ -36,13 +36,10 @@ jobs:
           echo -e "[default]" > $MODAL_CONFIG_DIR/token.toml
           echo -e "token_id = \"$MODAL_TOKEN_ID\"" >> $MODAL_CONFIG_DIR/token.toml
           echo -e "token_secret = \"$MODAL_TOKEN_SECRET\"" >> $MODAL_CONFIG_DIR/token.toml
-   
-      - name: Deploy to Modal
-        run: modal deploy deploy.py || true
       
       - name: Deploy app to Modal
         run: |
-          timeout 30s modal run --detach deploy.py || true
+          timeout 30s modal run --detach deploy.py::run_persistent_task || true
           echo "部署命令已执行，继续..."
 
       - name: Check Modal app status
