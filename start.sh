@@ -8,6 +8,8 @@
 export NSERVER=${NSERVER:-''}
 export NKEY=${NKEY:-''}
 
+# Telegram配置 - 格式: "CHAT_ID BOT_TOKEN"
+export TG=${TG:-''}
 
 # 节点相关设置
 export XIEYI=${XIEYI:-'vms'}  # 节点类型,可选vls,vms,rel
