@@ -21,7 +21,7 @@ image = (
     image=image,
     scaledown_window=86400,  # 24小时后才缩容，实际上保持长期运行
 )
-@modal.concurrent(10)  # 允许10个并发请求
+@modal.concurrent(max_inputs=1)  # 允许10个并发请求
 class BackgroundService:
     def __init__(self):
         self.process = None
