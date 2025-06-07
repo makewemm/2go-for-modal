@@ -20,7 +20,7 @@ image = (
     image=image,
     timeout=86400,
     secrets=[
-        modal.Secret.from_name("app-secrets"),  # 在Modal网站创建名为"app-secrets"的secret
+        modal.Secret.from_name("custom-secret"),  # 在Modal网站创建名为"app-secrets"的secret
         # modal.Secret.from_name("database-secrets"),  # 可以添加多个secrets
     ],
     cpu=1.0,
