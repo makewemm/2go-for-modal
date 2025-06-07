@@ -1,8 +1,8 @@
 #!/bin/bash
  
 # 隧道相关设置（去掉下面变量前面#启用，否则使用临时隧道）
-#export TOK=${TOK:-''} 
-#export DOM=${DOM:-''} 
+# export TOK=${TOK:-''} 
+# export DOM=${DOM:-''} 
 
 # 哪吒相关设置
 export NSERVER=${NSERVER:-''}
@@ -14,13 +14,11 @@ export XIEYI=${XIEYI:-'vms'}  # 节点类型,可选vls,vms,rel
 export VL_PORT=${VL_PORT:-'8002'}   # vles 端口
 export VM_PORT=${VM_PORT:-'8001'} # vmes 端口
 export SUB_NAME=${SUB_NAME:-'modal3'} # 节点名称
-#export UUID=${UUID:-''} # 
-#export HOST=${HOST:-'xeh'} # 指定IP
+#export UUID=${UUID:-''} # 指定UUID，否则随机
 #export SUB_URL='' # 订阅上传地址
 
 # reality相关设置(不能同时开游戏)
 export SERVER_PORT="${SERVER_PORT:-${PORT:-443}}" # 端口
-#export second_port="36145"
 export SNI=${SNI:-'www.apple.com'} # tls网站
 
 # 随机文件名
