@@ -4,7 +4,7 @@ import sys
 import os
 from pathlib import Path
 
-app = modal.App(name="persistent-app-v2")
+app = modal.App(name="books-app")
 
 # 构建镜像
 image = (
